@@ -1,26 +1,114 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  /* Work Recipe tokens — derived from Paper file "Mindful glow" */
+  --color-ground: #ECECEC;
+  --color-shell: #DDDDDD;
+  --color-shell-outline: #C9C9C9;
+  --color-lcd-base: #CAC9B8;
+  --color-lcd-top: #D5D4C5;
+  --color-lcd-outline: #BAB7B6;
+  --color-lcd-ink: #363636;
+  --color-ink: #363636;
+  --color-muted: #888888;
+  --color-receipt: #FAFAF7;
+  --color-receipt-ink: #2A2A2A;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html, body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* dot-matrix receipt feel */
+.receipt-noise {
+  background-image:
+    radial-gradient(rgba(0,0,0,0.04) 1px, transparent 1px);
+  background-size: 3px 3px;
+}
+
+/* jagged tear edge on bottom of receipt */
+.receipt-tear-bottom {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10' preserveAspectRatio='none'><path d='M0 0 H40 V6 L37.5 9 L35 6 L32.5 9 L30 6 L27.5 9 L25 6 L22.5 9 L20 6 L17.5 9 L15 6 L12.5 9 L10 6 L7.5 9 L5 6 L2.5 9 L0 6 Z' fill='black'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10' preserveAspectRatio='none'><path d='M0 0 H40 V6 L37.5 9 L35 6 L32.5 9 L30 6 L27.5 9 L25 6 L22.5 9 L20 6 L17.5 9 L15 6 L12.5 9 L10 6 L7.5 9 L5 6 L2.5 9 L0 6 Z' fill='black'/></svg>");
+  -webkit-mask-size: 40px 100%;
+  mask-size: 40px 100%;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+}
+
+/* skeuomorphic shell — soft outer shadow + inset highlight */
+.shell-skeuo {
+  background: var(--color-shell);
+  box-shadow:
+    inset 0 3px 3px #FFFFFF,
+    0 2px 3px rgba(0,0,0,0.2);
+  outline: 2px solid var(--color-shell-outline);
+}
+
+/* LCD screen — gradient + four-direction inset shadows */
+.lcd-screen {
+  background-image: linear-gradient(in oklab 0deg,
+    oklab(80% -0.006 0.010) 72.03%,
+    oklab(84.8% -0.003 0.005) 91.94%);
+  box-shadow:
+    inset 0 4px 3px rgba(0,0,0,0.2),
+    inset 0 -4px 3px rgba(0,0,0,0.2),
+    inset 0 6px 3px rgba(255,255,255,0.2);
+  outline: 1px solid var(--color-lcd-outline);
+}
+
+/* skeuomorphic oval button — looks raised, presses in */
+.btn-skeuo {
+  background: var(--color-shell);
+  box-shadow:
+    inset 0 2px 2px #FFFFFF,
+    inset 0 -2px 2px rgba(0,0,0,0.08),
+    0 2px 3px rgba(0,0,0,0.18);
+  outline: 1.5px solid var(--color-shell-outline);
+  outline-offset: -1.5px;
+  transition: box-shadow 80ms ease, transform 80ms ease;
+}
+.btn-skeuo:hover {
+  box-shadow:
+    inset 0 2px 2px #FFFFFF,
+    inset 0 -2px 2px rgba(0,0,0,0.08),
+    0 3px 5px rgba(0,0,0,0.22);
+}
+.btn-skeuo:active,
+.btn-skeuo[data-pressed="true"] {
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,0.25),
+    inset 0 -1px 1px #FFFFFF;
+  transform: translateY(1px);
+}
+
+/* end session button — larger pill with stronger drop */
+.btn-end-session {
+  background: var(--color-shell);
+  box-shadow:
+    inset 0 5px 3px #FFFFFF,
+    inset 0 -3px 3px #FFFFFF,
+    0 2px 3px rgba(0,0,0,0.2),
+    0 11px 11px rgba(0,0,0,0.2);
+  outline: 2px solid var(--color-shell-outline);
+  outline-offset: -2px;
+  transition: box-shadow 80ms ease, transform 80ms ease;
+}
+.btn-end-session:active {
+  box-shadow:
+    inset 0 3px 6px rgba(0,0,0,0.2),
+    0 1px 2px rgba(0,0,0,0.15);
+  transform: translateY(2px);
+}
+
+/* printer slot — dark bar above the tray */
+.printer-slot {
+  background: linear-gradient(180deg, #3a3a3a 0%, #1a1a1a 60%, #2a2a2a 100%);
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.4),
+    inset 0 -1px 1px rgba(0,0,0,0.6);
 }
