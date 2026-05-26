@@ -248,7 +248,7 @@ function drawReceiptFallback(
   context.fillStyle = "#2a2a2a";
   context.font = "600 13px monospace";
   context.textAlign = "center";
-  context.fillText("WORK RECIPE", CAPTURE_WIDTH / 2, 30);
+  context.fillText("TASK RECIPETS", CAPTURE_WIDTH / 2, 30);
 
   context.font = "600 11px monospace";
   context.fillText(

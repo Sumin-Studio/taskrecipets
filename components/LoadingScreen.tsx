@@ -71,7 +71,7 @@ export function LoadingScreen({
         >
           <div className="w-[260px] bg-[color:var(--color-receipt)] font-mono text-[color:var(--color-receipt-ink)] px-5 pt-4 pb-5">
             <div className="text-center text-[13px] font-semibold tracking-wider">
-              WORK RECIPE
+              TASK RECIPETS
             </div>
             <div className="mt-1 text-center text-[9px] tracking-wider opacity-70">
               WARMING UP THE PRESS
