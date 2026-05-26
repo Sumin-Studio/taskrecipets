@@ -49,7 +49,7 @@ export function TaskList() {
       </div>
       <div className="h-px bg-[color:var(--color-shell-outline)]/70 mb-4" />
 
-      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-1 -mx-1 py-1 -my-1">
+      <div className="flex-1 min-h-0 space-y-3 overflow-y-auto px-2 py-2">
         {adding && filter === "ongoing" && (
           <AddTaskInput
             autoFocus
