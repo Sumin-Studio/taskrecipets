@@ -62,7 +62,7 @@ function Brand() {
     <div className="flex items-center gap-3">
       <Image
         src="/logo.svg"
-        alt="Work Recipe"
+        alt="Task Recipets"
         width={2080}
         height={3294}
         unoptimized
@@ -70,7 +70,7 @@ function Brand() {
         draggable={false}
       />
       <div className="text-[13px] tracking-[0.32em] uppercase text-[color:var(--color-ink)]/85">
-        Work Recipe
+        Task Recipets
       </div>
     </div>
   );

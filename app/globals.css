@@ -3,7 +3,7 @@
 @theme inline {
   --font-mono: var(--font-plex-mono), ui-monospace, monospace;
 
-  /* Work Recipe tokens — derived from Paper file "Mindful glow" */
+  /* Task Recipets tokens — derived from Paper file "Mindful glow" */
   --color-ground: #ECECEC;
   --color-shell: #DDDDDD;
   --color-shell-outline: #C9C9C9;

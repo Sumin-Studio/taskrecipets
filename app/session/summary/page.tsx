@@ -1,7 +1,7 @@
 import { SessionSummary } from "@/components/session/SessionSummary";
 
 export const metadata = {
-  title: "Session summary · Work Recipe",
+  title: "Session summary · Task Recipets",
 };
 
 export default function SessionSummaryPage() {

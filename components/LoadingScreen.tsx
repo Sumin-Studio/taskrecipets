@@ -56,7 +56,7 @@ export function LoadingScreen({
     >
       <div className="flex flex-col items-center select-none">
         <div className="text-[11px] tracking-[0.32em] uppercase text-[color:var(--color-ink)]/70 mb-6">
-          Work Recipe
+          Task Recipets
         </div>
 
         {/* Printer slot */}

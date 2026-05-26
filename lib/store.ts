@@ -576,7 +576,7 @@ export const useStore = create<StoreState>()(
       _setHasHydrated: (hasHydrated) => set({ hasHydrated }),
     }),
     {
-      name: "work-recipe:v3",
+      name: "taskrecipets:v3",
       version: 4,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as { receipts?: Array<{ kind?: string; sourceTaskId?: string; id: string }> };
