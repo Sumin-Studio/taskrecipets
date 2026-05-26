@@ -124,7 +124,7 @@ html, body {
     z-index: 40;
     width: 720px;
     max-width: 720px;
-    height: clamp(16rem, 30vh, 19rem);
+    height: clamp(13.75rem, calc(10rem + 8vw), 15.5rem);
     min-height: 0;
     flex-direction: row;
     align-items: stretch;
