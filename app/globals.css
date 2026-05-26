@@ -13,7 +13,7 @@
   --color-lcd-ink: #363636;
   --color-ink: #363636;
   --color-muted: #888888;
-  --color-receipt: #FAFAF7;
+  --color-receipt: #FFFFFF;
   --color-receipt-ink: #2A2A2A;
 }
 
@@ -23,6 +23,184 @@ html, body {
   font-family: var(--font-mono);
 }
 
+/*
+ * Fluid workspace layout — sizes interpolate with viewport width instead of
+ * jumping at Tailwind breakpoints.
+ */
+.workspace-shell {
+  --workspace-pad-x: clamp(0.5rem, -0.25rem + 1.75vw, 8rem);
+  --workspace-col-gap: clamp(2rem, -0.75rem + 1.75vw, 2rem);
+  --workspace-left-col: clamp(22.5rem, 17.5rem + 10vw, 26.25rem);
+  --timer-shell-radius: clamp(2rem, 1.5rem + 0.65vw, 2.5rem);
+  --timer-lcd-radius-t: clamp(1.5rem, 1.1rem + 0.55vw, 2rem);
+  --timer-lcd-radius-b: clamp(0.75rem, 0.55rem + 0.28vw, 1rem);
+  --timer-shell-pad: clamp(0.5rem, 0.35rem + 0.35vw, 0.625rem);
+  --timer-clock-size: clamp(3.625rem, 2.25rem + 3.5vw, 4.75rem);
+  --timer-clock-leading: clamp(4.375rem, 2.75rem + 4.1vw, 5.75rem);
+  --timer-btn-h: clamp(2.5rem, 2.1rem + 0.85vw, 3rem);
+  --timer-label-size: clamp(0.75rem, 0.7rem + 0.12vw, 0.8125rem);
+
+  padding-inline: var(--workspace-pad-x);
+}
+
+.workspace-grid {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(0, var(--workspace-left-col)) minmax(720px, 1fr);
+  grid-template-rows: auto 1fr;
+  column-gap: var(--workspace-col-gap);
+  row-gap: 2rem;
+  padding-block: 2rem;
+}
+
+.workspace-left {
+  min-width: 0;
+  width: 100%;
+  max-width: var(--workspace-left-col);
+}
+
+.workspace-panel {
+  width: 100%;
+  max-width: var(--workspace-left-col);
+}
+
+.workspace-task-list-wrap {
+  min-width: 0;
+}
+
+@media (max-width: 1240px) {
+  .workspace-shell {
+    --workspace-pad-x: clamp(0.75rem, 1vw, 1rem);
+    --workspace-col-gap: clamp(0.75rem, 1.4vw, 1.25rem);
+    --workspace-left-col: clamp(18rem, 24vw, 22rem);
+  }
+
+  .workspace-grid {
+    grid-template-columns: minmax(18rem, var(--workspace-left-col)) minmax(720px, 1fr);
+  }
+
+  .workspace-controls-cell {
+    gap: clamp(1rem, 2vw, 1.5rem);
+  }
+}
+
+@media (max-width: 1080px) {
+  .workspace-shell {
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-inline: max(0.75rem, calc((100vw - 720px) / 2));
+  }
+
+  .workspace-grid {
+    width: 720px;
+    height: auto;
+    min-height: 100%;
+    grid-template-columns: 720px;
+    grid-template-rows: auto auto auto;
+    column-gap: 0;
+    row-gap: 1.25rem;
+    justify-content: center;
+    align-content: start;
+    padding-block: 1.5rem 2rem;
+  }
+
+  .workspace-brand-cell {
+    grid-column: 1;
+    grid-row: 1;
+    max-width: 720px;
+  }
+
+  .workspace-credit-cell {
+    grid-column: 1;
+    grid-row: 1;
+    min-height: 2.5rem;
+  }
+
+  .workspace-controls-cell {
+    grid-column: 1;
+    grid-row: 2;
+    position: relative;
+    z-index: 40;
+    width: 720px;
+    max-width: 720px;
+    height: clamp(16rem, 30vh, 19rem);
+    min-height: 0;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .workspace-controls-cell > .workspace-panel {
+    flex: 0 0 320px;
+    max-width: none;
+  }
+
+  .workspace-task-list-wrap {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-task-list-wrap > .workspace-panel {
+    height: 100%;
+    max-width: none;
+  }
+
+  .workspace-tray-cell {
+    grid-column: 1;
+    grid-row: 3;
+    position: relative;
+    z-index: 10;
+    width: 720px;
+    height: max(840px, calc(100vh - 2rem));
+    overflow: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .workspace-shell {
+    overflow-x: auto;
+    padding-inline: 0.75rem;
+  }
+
+  .workspace-grid {
+    justify-content: start;
+  }
+}
+
+.timer-widget-shell {
+  border-radius: var(--timer-shell-radius);
+  padding: var(--timer-shell-pad);
+  padding-bottom: clamp(0.75rem, 0.55rem + 0.35vw, 1rem);
+}
+
+.timer-widget-lcd {
+  border-radius: var(--timer-lcd-radius-t) var(--timer-lcd-radius-t)
+    var(--timer-lcd-radius-b) var(--timer-lcd-radius-b);
+  padding-inline: clamp(1rem, 0.85rem + 0.35vw, 1.25rem);
+  padding-top: clamp(0.75rem, 0.6rem + 0.35vw, 1rem);
+  padding-bottom: clamp(1rem, 0.85rem + 0.35vw, 1.25rem);
+}
+
+.timer-widget-label {
+  font-size: var(--timer-label-size);
+}
+
+.timer-widget-clock {
+  font-size: var(--timer-clock-size);
+  line-height: var(--timer-clock-leading);
+}
+
+.timer-widget-controls {
+  margin-top: clamp(0.5rem, 0.35rem + 0.35vw, 0.75rem);
+  gap: clamp(0.5rem, 0.35rem + 0.35vw, 0.75rem);
+}
+
+.timer-widget-btn {
+  height: var(--timer-btn-h);
+}
+
 /* dot-matrix receipt feel */
 .receipt-noise {
   background-image:
@@ -30,12 +208,22 @@ html, body {
   background-size: 3px 3px;
 }
 
-/* jagged tear edge on bottom of receipt */
+/* jagged tear edge — bottom strip (small sawtooth, body on top, teeth point down) */
 .receipt-tear-bottom {
-  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10' preserveAspectRatio='none'><path d='M0 0 H40 V6 L37.5 9 L35 6 L32.5 9 L30 6 L27.5 9 L25 6 L22.5 9 L20 6 L17.5 9 L15 6 L12.5 9 L10 6 L7.5 9 L5 6 L2.5 9 L0 6 Z' fill='black'/></svg>");
-  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 10' preserveAspectRatio='none'><path d='M0 0 H40 V6 L37.5 9 L35 6 L32.5 9 L30 6 L27.5 9 L25 6 L22.5 9 L20 6 L17.5 9 L15 6 L12.5 9 L10 6 L7.5 9 L5 6 L2.5 9 L0 6 Z' fill='black'/></svg>");
-  -webkit-mask-size: 40px 100%;
-  mask-size: 40px 100%;
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 6' preserveAspectRatio='none'><path d='M0 0 H24 V4 L22 6 L20 4 L18 6 L16 4 L14 6 L12 4 L10 6 L8 4 L6 6 L4 4 L2 6 L0 4 Z' fill='black'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 6' preserveAspectRatio='none'><path d='M0 0 H24 V4 L22 6 L20 4 L18 6 L16 4 L14 6 L12 4 L10 6 L8 4 L6 6 L4 4 L2 6 L0 4 Z' fill='black'/></svg>");
+  -webkit-mask-size: 24px 100%;
+  mask-size: 24px 100%;
+  -webkit-mask-repeat: repeat-x;
+  mask-repeat: repeat-x;
+}
+
+/* jagged tear edge — top strip (mirror — body on bottom, teeth point up) */
+.receipt-tear-top {
+  -webkit-mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 6' preserveAspectRatio='none'><path d='M0 6 H24 V2 L22 0 L20 2 L18 0 L16 2 L14 0 L12 2 L10 0 L8 2 L6 0 L4 2 L2 0 L0 2 Z' fill='black'/></svg>");
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 6' preserveAspectRatio='none'><path d='M0 6 H24 V2 L22 0 L20 2 L18 0 L16 2 L14 0 L12 2 L10 0 L8 2 L6 0 L4 2 L2 0 L0 2 Z' fill='black'/></svg>");
+  -webkit-mask-size: 24px 100%;
+  mask-size: 24px 100%;
   -webkit-mask-repeat: repeat-x;
   mask-repeat: repeat-x;
 }
@@ -45,8 +233,38 @@ html, body {
   background: var(--color-shell);
   box-shadow:
     inset 0 3px 3px #FFFFFF,
+    0 0 0 2px var(--color-shell-outline),
     0 2px 3px rgba(0,0,0,0.2);
-  outline: 2px solid var(--color-shell-outline);
+}
+
+/* task row — white card with thin border + soft shadow */
+.task-row {
+  background: #FFFFFF;
+  box-shadow:
+    0 0 0 1.5px #D7D7D7,
+    0 2px 4px rgba(0,0,0,0.06),
+    0 6px 14px rgba(0,0,0,0.04);
+  transition: box-shadow 120ms ease;
+}
+.task-row.task-row-current {
+  box-shadow:
+    0 0 0 2px rgba(54,54,54,0.6),
+    0 2px 5px rgba(0,0,0,0.08),
+    0 6px 14px rgba(0,0,0,0.05);
+}
+
+.subtask-pill {
+  background: #F4F4F4;
+  box-shadow:
+    0 0 0 1px #D7D7D7,
+    0 1px 1px rgba(0,0,0,0.04);
+  transition: box-shadow 100ms ease, background 100ms ease;
+}
+.subtask-pill:hover {
+  background: #ECECEC;
+  box-shadow:
+    0 0 0 1px #A8A8A8,
+    0 1px 2px rgba(0,0,0,0.06);
 }
 
 /* LCD screen — gradient + four-direction inset shadows */
@@ -80,9 +298,10 @@ html, body {
 }
 .btn-skeuo:active,
 .btn-skeuo[data-pressed="true"] {
+  background: #D0D0D0;
   box-shadow:
-    inset 0 2px 4px rgba(0,0,0,0.25),
-    inset 0 -1px 1px #FFFFFF;
+    inset 0 2px 3px rgba(0,0,0,0.18),
+    inset 0 -1px 1px rgba(255,255,255,0.4);
   transform: translateY(1px);
 }
 
@@ -111,4 +330,62 @@ html, body {
   box-shadow:
     0 2px 4px rgba(0,0,0,0.4),
     inset 0 -1px 1px rgba(0,0,0,0.6);
+}
+
+/* tray photo — soft alpha fade at sides + bottom into page ground */
+.tray-surface {
+  filter: drop-shadow(-6px 8px 28px rgba(0, 0, 0, 0.18));
+}
+
+.tray-surface__image {
+  background-image: url(/tray.png);
+  background-size: 100% auto;
+  background-repeat: no-repeat;
+  background-position: top center;
+  -webkit-mask-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--tray-edge-fade-x, 4px),
+      #000 calc(100% - var(--tray-edge-fade-x, 4px)),
+      transparent 100%
+    ),
+    linear-gradient(to bottom, #000 0%, #000 var(--tray-bottom-fade-start, 92%), transparent 100%);
+  mask-image:
+    linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--tray-edge-fade-x, 4px),
+      #000 calc(100% - var(--tray-edge-fade-x, 4px)),
+      transparent 100%
+    ),
+    linear-gradient(to bottom, #000 0%, #000 var(--tray-bottom-fade-start, 92%), transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+
+.receipt-stage-shell canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* sign-off modal — shell-skeuo frame lifted as a floating dialog */
+.signoff-frame {
+  background: var(--color-shell);
+  box-shadow:
+    inset 0 3px 3px #FFFFFF,
+    inset 0 -2px 3px rgba(0, 0, 0, 0.05),
+    0 0 0 2px var(--color-shell-outline),
+    0 14px 36px rgba(0, 0, 0, 0.28);
+}
+
+/* recessed pocket — echoes lcd-screen's inset language, darker tint for media */
+.signoff-viewport {
+  background-image: linear-gradient(180deg, #c0c0c0 0%, #a8a8a8 100%);
+  box-shadow:
+    inset 0 4px 5px rgba(0, 0, 0, 0.22),
+    inset 0 -3px 3px rgba(255, 255, 255, 0.2),
+    inset 0 8px 8px -6px rgba(0, 0, 0, 0.18);
+  outline: 1px solid var(--color-lcd-outline);
+  outline-offset: -1px;
 }

@@ -2,8 +2,21 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { computeSquares, type SquareState, type TimelineEntry } from "./computeSquares";
 
-export type Phase = "focus" | "shortBreak" | "longBreak";
+/**
+ * Simple count-up task timer + live-printing receipt model.
+ *
+ * Each task tracks total active/break time AND a wall-time timeline of every
+ * mode transition since the user first pressed Start on it. The timeline is
+ * what powers the live receipt's minute-by-minute grid.
+ *
+ * Completing a task is now a two-step flow: requestComplete() opens the
+ * photo capture modal; finalizeComplete(photoDataUrl | null) is what actually
+ * mints the receipt and drops it onto the tray.
+ */
+
+export type TimerMode = "idle" | "working" | "break";
 
 export type Subtask = {
   id: string;
@@ -17,94 +30,137 @@ export type Task = {
   subtasks: Subtask[];
   createdAt: number;
   completedAt?: number;
-  pomodorosCompleted: number;
-  totalFocusMs: number;
+  /** total ms spent actively working on this task */
+  totalActiveMs: number;
+  /** total ms spent on breaks while this task was selected */
   totalBreakMs: number;
+  /** number of breaks taken */
+  breakCount: number;
+  /** Date.now() at the first Start press on this task — present once started */
+  taskStartedAt?: number;
+  /** every mode transition since taskStartedAt, in wall time */
+  timeline: TimelineEntry[];
 };
 
-export type ReceiptKind = "task" | "session";
-
 export type Receipt = {
+  kind?: "task";
   id: string;
-  kind: ReceiptKind;
+  sourceTaskId: string;
   number: number;
   printedAt: number;
   rotation: number;
-  // task receipts
-  taskTitle?: string;
-  subtasks?: { title: string; done: boolean }[];
-  pomodorosCompleted?: number;
-  totalFocusMs?: number;
-  totalBreakMs?: number;
-  motto?: string;
-  // session receipts
-  tasksCompleted?: { title: string; pomodoros: number; focusMs: number }[];
-  sessionFocusMs?: number;
-  sessionBreakMs?: number;
+  taskTitle: string;
+  taskStartedAt: number;
+  taskCompletedAt: number;
+  dayCounter: number;
+  timeline: TimelineEntry[];
+  /** Frozen minute grid — omitted on receipts minted before v5 */
+  squares?: SquareState[];
+  photoDataUrl: string | null;
+  totalActiveMs: number;
+  totalBreakMs: number;
+  breakCount: number;
+  motto: string;
+};
+
+export type SessionReceipt = {
+  id: string;
+  number: number;
+  printedAt: number;
+  rotation: number;
+  kind: "session";
+  tasksCompleted: { title: string; activeMs: number; breaks: number }[];
+  sessionActiveMs: number;
+  sessionBreakMs: number;
+  motto: string;
+};
+
+export type AnyReceipt = Receipt | SessionReceipt;
+
+export type CutReceiptSnapshot = {
+  taskId: string;
+  taskStartedAt: number;
+  timeline: TimelineEntry[];
+  frozenAt: number;
+  squares: SquareState[];
+  photoDataUrl?: string | null;
+  /** tear + cut line shown after photo is attached, before landing in stack */
+  isCut?: boolean;
 };
 
 export type Settings = {
-  focusMs: number;
-  shortBreakMs: number;
-  longBreakMs: number;
-  longBreakEvery: number;
   soundOn: boolean;
 };
 
 export type TimerSnapshot = {
-  phase: Phase;
-  running: boolean;
-  /** absolute ms remaining when timer was last stopped/started */
-  remainingMs: number;
-  /** performance.now() at last start; undefined when paused */
-  startedAtPerf?: number;
-  /** Date.now() at last start — used to recover after refresh */
+  mode: TimerMode;
+  /** Date.now() when the current run started — undefined when idle */
   startedAtWall?: number;
-  /** count of focus blocks completed in the current cycle (resets after long break) */
-  focusBlocksInCycle: number;
+  /** ms of running time accumulated for the *current task* before the latest start */
+  accumulatedActiveMs: number;
+  /** ms of break time accumulated for the *current task* before the latest start */
+  accumulatedBreakMs: number;
+  /** break count for the current task */
+  breakCount: number;
 };
 
 type StoreState = {
   tasks: Task[];
   currentTaskId: string | null;
-  receipts: Receipt[];
+  receipts: AnyReceipt[];
   receiptCounter: number;
+  /** "task of the day" sequence — `{ "2026-05-19": 3 }` */
+  dayCounter: Record<string, number>;
+  /** taskId awaiting a photo decision (drives PhotoCaptureModal) */
+  pendingPhotoFor: string | null;
+  /** Frozen strip at the printer while the photo modal is open */
+  cutReceipt: CutReceiptSnapshot | null;
+  /** Receipt currently animating from printer → stack */
+  landingReceiptId: string | null;
+  hasHydrated: boolean;
   settings: Settings;
   timer: TimerSnapshot;
   sessionStartedAt: number | null;
-  sessionFocusMs: number;
+  sessionActiveMs: number;
   sessionBreakMs: number;
+  /** Snapshot of the just-ended session — drives the /session/summary page */
+  endedSession: { startedAt: number; endedAt: number } | null;
 
   // task actions
   addTask: (title: string) => void;
   removeTask: (id: string) => void;
   selectTask: (id: string | null) => void;
-  renameTask: (id: string, title: string) => void;
   addSubtask: (taskId: string, title: string) => void;
   toggleSubtask: (taskId: string, subId: string) => void;
   removeSubtask: (taskId: string, subId: string) => void;
-  completeTask: (id: string) => void;
 
   // timer actions
-  startTimer: () => void;
-  pauseTimer: () => void;
-  resetTimer: () => void;
-  skipPhase: () => void;
-  setRemainingMs: (ms: number) => void;
-  onPhaseElapsed: () => void;
+  start: () => void;
+  pause: () => void;
+  /** Opens the photo capture modal. Does not mint the receipt. */
+  requestComplete: () => void;
+  /** Cancel the photo modal — return the timer to its prior running state. */
+  cancelComplete: () => void;
+  /** Mint the receipt, drop it onto the tray, clear the timer. */
+  finalizeComplete: (photoDataUrl: string | null) => void;
+  /** Attach mood photo and show the cut — then finalizeComplete runs. */
+  attachPhotoToCut: (photoDataUrl: string | null) => void;
+  clearLandingReceipt: () => void;
 
   // session
   endSession: () => void;
+  /** Hard reset — wipes all tasks, receipts, counters. Called by Back-to-app confirm. */
+  wipeForFreshStart: () => void;
 
   // settings
   updateSettings: (patch: Partial<Settings>) => void;
+
+  // internal helper to flush in-flight time into accumulators
+  _flush: () => void;
+  _setHasHydrated: (hasHydrated: boolean) => void;
 };
 
 const DEFAULT_SETTINGS: Settings = {
-  focusMs: 25 * 60_000,
-  shortBreakMs: 5 * 60_000,
-  longBreakMs: 15 * 60_000,
-  longBreakEvery: 4,
   soundOn: true,
 };
 
@@ -126,19 +182,21 @@ function pickMotto() {
   return MOTTOS[Math.floor(Math.random() * MOTTOS.length)];
 }
 
-function phaseDuration(s: Settings, phase: Phase) {
-  if (phase === "focus") return s.focusMs;
-  if (phase === "shortBreak") return s.shortBreakMs;
-  return s.longBreakMs;
+function freshTimer(): TimerSnapshot {
+  return {
+    mode: "idle",
+    accumulatedActiveMs: 0,
+    accumulatedBreakMs: 0,
+    breakCount: 0,
+  };
 }
 
-function initialTimer(s: Settings): TimerSnapshot {
-  return {
-    phase: "focus",
-    running: false,
-    remainingMs: s.focusMs,
-    focusBlocksInCycle: 0,
-  };
+function dayKey(ts: number): string {
+  const d = new Date(ts);
+  const y = d.getFullYear();
+  const m = (d.getMonth() + 1).toString().padStart(2, "0");
+  const day = d.getDate().toString().padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export const useStore = create<StoreState>()(
@@ -148,11 +206,17 @@ export const useStore = create<StoreState>()(
       currentTaskId: null,
       receipts: [],
       receiptCounter: 0,
+      dayCounter: {},
+      pendingPhotoFor: null,
+      cutReceipt: null,
+      landingReceiptId: null,
+      hasHydrated: false,
       settings: DEFAULT_SETTINGS,
-      timer: initialTimer(DEFAULT_SETTINGS),
+      timer: freshTimer(),
       sessionStartedAt: null,
-      sessionFocusMs: 0,
+      sessionActiveMs: 0,
       sessionBreakMs: 0,
+      endedSession: null,
 
       addTask: (title) => {
         const t: Task = {
@@ -160,9 +224,10 @@ export const useStore = create<StoreState>()(
           title: title.trim(),
           subtasks: [],
           createdAt: Date.now(),
-          pomodorosCompleted: 0,
-          totalFocusMs: 0,
+          totalActiveMs: 0,
           totalBreakMs: 0,
+          breakCount: 0,
+          timeline: [],
         };
         set((s) => ({
           tasks: [...s.tasks, t],
@@ -170,18 +235,39 @@ export const useStore = create<StoreState>()(
         }));
       },
 
-      removeTask: (id) =>
-        set((s) => ({
-          tasks: s.tasks.filter((t) => t.id !== id),
-          currentTaskId: s.currentTaskId === id ? null : s.currentTaskId,
-        })),
+      removeTask: (id) => {
+        const s = get();
+        const wasCurrent = s.currentTaskId === id;
+        if (wasCurrent) get()._flush();
+        set((cur) => ({
+          tasks: cur.tasks.filter((t) => t.id !== id),
+          currentTaskId: wasCurrent ? null : cur.currentTaskId,
+          timer: wasCurrent ? freshTimer() : cur.timer,
+        }));
+      },
 
-      selectTask: (id) => set({ currentTaskId: id }),
-
-      renameTask: (id, title) =>
-        set((s) => ({
-          tasks: s.tasks.map((t) => (t.id === id ? { ...t, title } : t)),
-        })),
+      selectTask: (id) => {
+        const s = get();
+        if (id === s.currentTaskId) return;
+        if (s.currentTaskId) {
+          // commit pending time to outgoing task — but DON'T finalize its receipt
+          get()._flush();
+          const out = get();
+          set({
+            tasks: out.tasks.map((t) =>
+              t.id === out.currentTaskId
+                ? {
+                    ...t,
+                    totalActiveMs: t.totalActiveMs + out.timer.accumulatedActiveMs,
+                    totalBreakMs: t.totalBreakMs + out.timer.accumulatedBreakMs,
+                    breakCount: t.breakCount + out.timer.breakCount,
+                  }
+                : t,
+            ),
+          });
+        }
+        set({ currentTaskId: id, timer: freshTimer() });
+      },
 
       addSubtask: (taskId, title) =>
         set((s) => ({
@@ -221,246 +307,345 @@ export const useStore = create<StoreState>()(
           ),
         })),
 
-      completeTask: (id) => {
+      start: () => {
         const s = get();
-        const task = s.tasks.find((t) => t.id === id);
-        if (!task || task.completedAt) return;
+        if (!s.currentTaskId) return;
 
-        const nextNumber = s.receiptCounter + 1;
+        const now = Date.now();
+
+        // ensure task has taskStartedAt + initial timeline entry
+        const taskUpdates = s.tasks.map((t) => {
+          if (t.id !== s.currentTaskId) return t;
+          const startedAt = t.taskStartedAt ?? now;
+          const isFirstStart = !t.taskStartedAt;
+          return {
+            ...t,
+            taskStartedAt: startedAt,
+            timeline: isFirstStart
+              ? [{ ts: startedAt, mode: "working" as const }]
+              : [...t.timeline, { ts: now, mode: "working" as const }],
+          };
+        });
+
+        if (s.timer.mode === "break") {
+          const elapsed = s.timer.startedAtWall ? now - s.timer.startedAtWall : 0;
+          set({
+            tasks: taskUpdates,
+            timer: {
+              ...s.timer,
+              mode: "working",
+              startedAtWall: now,
+              accumulatedBreakMs: s.timer.accumulatedBreakMs + elapsed,
+              breakCount: s.timer.breakCount + 1,
+            },
+          });
+        } else if (s.timer.mode === "idle") {
+          set({
+            tasks: taskUpdates,
+            timer: {
+              ...s.timer,
+              mode: "working",
+              startedAtWall: now,
+            },
+            sessionStartedAt: s.sessionStartedAt ?? now,
+          });
+        }
+      },
+
+      pause: () => {
+        const s = get();
+        if (s.timer.mode !== "working" || !s.currentTaskId) return;
+        const now = Date.now();
+        const elapsed = s.timer.startedAtWall ? now - s.timer.startedAtWall : 0;
+        set({
+          tasks: s.tasks.map((t) =>
+            t.id === s.currentTaskId
+              ? { ...t, timeline: [...t.timeline, { ts: now, mode: "break" }] }
+              : t,
+          ),
+          timer: {
+            ...s.timer,
+            mode: "break",
+            startedAtWall: now,
+            accumulatedActiveMs: s.timer.accumulatedActiveMs + elapsed,
+          },
+        });
+      },
+
+      requestComplete: () => {
+        const s = get();
+        if (!s.currentTaskId) return;
+        get()._flush();
+        const after = get();
+        const task = after.tasks.find((t) => t.id === s.currentTaskId);
+        if (!task) return;
+        const now = Date.now();
+        const activeMs = task.totalActiveMs + after.timer.accumulatedActiveMs;
+        const startedAt = task.taskStartedAt ?? (activeMs > 0 ? now - activeMs : now);
+        let frozenAt = now;
+        if (frozenAt <= startedAt) frozenAt = startedAt + 1;
+        const timeline =
+          task.timeline.length > 0
+            ? [...task.timeline]
+            : [{ ts: startedAt, mode: "working" as const }];
+        const squares = computeSquares(startedAt, timeline, frozenAt);
+        set({
+          tasks: after.tasks.map((t) =>
+            t.id === s.currentTaskId && !t.taskStartedAt
+              ? { ...t, taskStartedAt: startedAt, timeline }
+              : t,
+          ),
+          sessionStartedAt: after.sessionStartedAt ?? startedAt,
+          pendingPhotoFor: s.currentTaskId,
+          cutReceipt: {
+            taskId: s.currentTaskId,
+            taskStartedAt: startedAt,
+            timeline,
+            frozenAt,
+            squares,
+            photoDataUrl: null,
+            isCut: false,
+          },
+          timer: {
+            ...after.timer,
+            mode: "idle",
+            startedAtWall: undefined,
+          },
+        });
+      },
+
+      cancelComplete: () => set({ pendingPhotoFor: null, cutReceipt: null }),
+
+      attachPhotoToCut: (photoDataUrl) => {
+        const s = get();
+        if (!s.cutReceipt) return;
+        set({
+          pendingPhotoFor: null,
+          cutReceipt: {
+            ...s.cutReceipt,
+            photoDataUrl,
+            isCut: true,
+          },
+        });
+      },
+
+      clearLandingReceipt: () => set({ landingReceiptId: null }),
+
+      finalizeComplete: (photoDataUrl) => {
+        const s = get();
+        const cut = s.cutReceipt;
+        if (!cut) return;
+        const taskId = cut.taskId;
+
+        const now = Date.now();
+        get()._flush();
+        const after = get();
+
+        const task = after.tasks.find((t) => t.id === taskId);
+        if (!task) return;
+
+        const activeMs = task.totalActiveMs + after.timer.accumulatedActiveMs;
+        const breakMs = task.totalBreakMs + after.timer.accumulatedBreakMs;
+        const breaks = task.breakCount + after.timer.breakCount;
+
+        const dKey = dayKey(now);
+        const nextDayCount = (after.dayCounter[dKey] ?? 0) + 1;
+        const nextNumber = after.receiptCounter + 1;
+
         const receipt: Receipt = {
-          id: uid(),
           kind: "task",
+          id: uid(),
+          sourceTaskId: taskId,
           number: nextNumber,
-          printedAt: Date.now(),
+          printedAt: now,
           rotation: (Math.random() - 0.5) * 4,
           taskTitle: task.title,
-          subtasks: task.subtasks.map((su) => ({ title: su.title, done: su.done })),
-          pomodorosCompleted: task.pomodorosCompleted,
-          totalFocusMs: task.totalFocusMs,
-          totalBreakMs: task.totalBreakMs,
+          taskStartedAt: cut.taskStartedAt ?? task.taskStartedAt ?? now,
+          taskCompletedAt: cut.frozenAt ?? now,
+          dayCounter: nextDayCount,
+          timeline: [...cut.timeline],
+          squares: cut.squares ?? computeSquares(
+            cut.taskStartedAt ?? task.taskStartedAt ?? now,
+            cut.timeline,
+            cut.frozenAt ?? now,
+          ),
+          photoDataUrl: photoDataUrl ?? cut.photoDataUrl ?? null,
+          totalActiveMs: activeMs,
+          totalBreakMs: breakMs,
+          breakCount: breaks,
           motto: pickMotto(),
         };
 
         set({
-          tasks: s.tasks.map((t) =>
-            t.id === id ? { ...t, completedAt: Date.now() } : t,
+          tasks: after.tasks.map((t) =>
+            t.id === taskId
+              ? {
+                  ...t,
+                  completedAt: now,
+                  totalActiveMs: activeMs,
+                  totalBreakMs: breakMs,
+                  breakCount: breaks,
+                }
+              : t,
           ),
-          receipts: [...s.receipts, receipt].slice(-50),
+          receipts: [...after.receipts, receipt].slice(-50),
           receiptCounter: nextNumber,
-          currentTaskId: s.currentTaskId === id ? null : s.currentTaskId,
-        });
-      },
-
-      startTimer: () => {
-        const s = get();
-        if (s.timer.running) return;
-        set({
-          timer: {
-            ...s.timer,
-            running: true,
-            startedAtPerf: performance.now(),
-            startedAtWall: Date.now(),
-          },
-          sessionStartedAt: s.sessionStartedAt ?? Date.now(),
-        });
-      },
-
-      pauseTimer: () => {
-        const s = get();
-        if (!s.timer.running || s.timer.startedAtPerf === undefined) {
-          set({ timer: { ...s.timer, running: false } });
-          return;
-        }
-        const elapsed = performance.now() - s.timer.startedAtPerf;
-        const remaining = Math.max(0, s.timer.remainingMs - elapsed);
-        // also credit elapsed to session/task totals
-        const phase = s.timer.phase;
-        const phaseElapsedAttribution = Math.min(elapsed, s.timer.remainingMs);
-        set({
-          timer: {
-            ...s.timer,
-            running: false,
-            remainingMs: remaining,
-            startedAtPerf: undefined,
-            startedAtWall: undefined,
-          },
-          sessionFocusMs:
-            phase === "focus" ? s.sessionFocusMs + phaseElapsedAttribution : s.sessionFocusMs,
-          sessionBreakMs:
-            phase !== "focus" ? s.sessionBreakMs + phaseElapsedAttribution : s.sessionBreakMs,
-          tasks:
-            phase === "focus" && s.currentTaskId
-              ? s.tasks.map((t) =>
-                  t.id === s.currentTaskId
-                    ? { ...t, totalFocusMs: t.totalFocusMs + phaseElapsedAttribution }
-                    : t,
-                )
-              : s.tasks,
-        });
-      },
-
-      resetTimer: () => {
-        const s = get();
-        set({
-          timer: {
-            ...s.timer,
-            running: false,
-            remainingMs: phaseDuration(s.settings, s.timer.phase),
-            startedAtPerf: undefined,
-            startedAtWall: undefined,
-          },
-        });
-      },
-
-      skipPhase: () => {
-        // pause, then advance
-        get().pauseTimer();
-        get().onPhaseElapsed();
-      },
-
-      setRemainingMs: (ms) =>
-        set((s) => ({
-          timer: { ...s.timer, remainingMs: Math.max(0, ms) },
-        })),
-
-      onPhaseElapsed: () => {
-        const s = get();
-        const phase = s.timer.phase;
-        let nextPhase: Phase;
-        let nextFocusBlocks = s.timer.focusBlocksInCycle;
-
-        if (phase === "focus") {
-          nextFocusBlocks += 1;
-          // credit a pomodoro to current task
-          if (s.currentTaskId) {
-            set({
-              tasks: s.tasks.map((t) =>
-                t.id === s.currentTaskId
-                  ? { ...t, pomodorosCompleted: t.pomodorosCompleted + 1 }
-                  : t,
-              ),
-            });
-          }
-          nextPhase =
-            nextFocusBlocks >= s.settings.longBreakEvery ? "longBreak" : "shortBreak";
-          if (nextPhase === "longBreak") nextFocusBlocks = 0;
-        } else {
-          nextPhase = "focus";
-        }
-
-        set({
-          timer: {
-            phase: nextPhase,
-            running: false,
-            remainingMs: phaseDuration(get().settings, nextPhase),
-            focusBlocksInCycle: nextFocusBlocks,
-          },
+          dayCounter: { ...after.dayCounter, [dKey]: nextDayCount },
+          sessionActiveMs: after.sessionActiveMs + after.timer.accumulatedActiveMs,
+          sessionBreakMs: after.sessionBreakMs + after.timer.accumulatedBreakMs,
+          currentTaskId: after.currentTaskId === taskId ? null : after.currentTaskId,
+          pendingPhotoFor: null,
+          cutReceipt: null,
+          landingReceiptId: receipt.id,
+          timer: freshTimer(),
         });
       },
 
       endSession: () => {
-        const s = get();
-        // commit any in-flight elapsed time first
-        if (s.timer.running) get().pauseTimer();
+        get()._flush();
         const after = get();
         if (after.sessionStartedAt === null) return;
 
-        const nextNumber = after.receiptCounter + 1;
-        const completedToday = after.tasks
-          .filter((t) => t.completedAt && t.completedAt >= (after.sessionStartedAt ?? 0))
-          .map((t) => ({
-            title: t.title,
-            pomodoros: t.pomodorosCompleted,
-            focusMs: t.totalFocusMs,
-          }));
+        // Force-finalize any receipt still in the printer queue before locking endedAt.
+        // Without this, a receipt whose finalizeComplete setTimeout hasn't fired yet
+        // (e.g. user ends session while photo modal is animating) would be dropped.
+        if (after.cutReceipt) {
+          get().finalizeComplete(after.cutReceipt.photoDataUrl ?? null);
+        }
 
-        const sessionReceipt: Receipt = {
-          id: uid(),
-          kind: "session",
-          number: nextNumber,
-          printedAt: Date.now(),
-          rotation: (Math.random() - 0.5) * 4,
-          tasksCompleted: completedToday,
-          sessionFocusMs: after.sessionFocusMs,
-          sessionBreakMs: after.sessionBreakMs,
-          motto: pickMotto(),
-        };
-
+        const final = get();
         set({
-          receipts: [...after.receipts, sessionReceipt].slice(-50),
-          receiptCounter: nextNumber,
+          endedSession: {
+            startedAt: final.sessionStartedAt ?? after.sessionStartedAt,
+            endedAt: Date.now(),
+          },
           sessionStartedAt: null,
-          sessionFocusMs: 0,
+          sessionActiveMs: 0,
           sessionBreakMs: 0,
-          timer: initialTimer(after.settings),
+          currentTaskId: null,
+          pendingPhotoFor: null,
+          landingReceiptId: null,
+          timer: freshTimer(),
         });
       },
 
-      updateSettings: (patch) => {
-        const s = get();
-        const nextSettings = { ...s.settings, ...patch };
-        const isIdle = !s.timer.running && s.timer.remainingMs === phaseDuration(s.settings, s.timer.phase);
+      wipeForFreshStart: () =>
         set({
-          settings: nextSettings,
-          timer: isIdle
-            ? { ...s.timer, remainingMs: phaseDuration(nextSettings, s.timer.phase) }
-            : s.timer,
-        });
+          tasks: [],
+          receipts: [],
+          dayCounter: {},
+          receiptCounter: 0,
+          endedSession: null,
+          cutReceipt: null,
+          landingReceiptId: null,
+          pendingPhotoFor: null,
+          currentTaskId: null,
+          sessionStartedAt: null,
+          sessionActiveMs: 0,
+          sessionBreakMs: 0,
+          timer: freshTimer(),
+        }),
+
+      updateSettings: (patch) =>
+        set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+      _flush: () => {
+        const s = get();
+        if (s.timer.mode === "idle" || !s.timer.startedAtWall) return;
+        const now = Date.now();
+        const elapsed = now - s.timer.startedAtWall;
+        if (s.timer.mode === "working") {
+          set({
+            timer: {
+              ...s.timer,
+              accumulatedActiveMs: s.timer.accumulatedActiveMs + elapsed,
+              startedAtWall: now,
+            },
+          });
+        } else if (s.timer.mode === "break") {
+          set({
+            timer: {
+              ...s.timer,
+              accumulatedBreakMs: s.timer.accumulatedBreakMs + elapsed,
+              startedAtWall: now,
+            },
+          });
+        }
       },
+
+      _setHasHydrated: (hasHydrated) => set({ hasHydrated }),
     }),
     {
-      name: "work-recipe:v1",
-      version: 1,
-      // recover an in-flight timer across reloads
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        const t = state.timer;
-        if (t.running && t.startedAtWall !== undefined) {
-          const elapsed = Date.now() - t.startedAtWall;
-          const remaining = t.remainingMs - elapsed;
-          if (remaining <= 0) {
-            // phase ended while we were away — collapse to phase boundary
-            state.timer = {
-              ...t,
-              running: false,
-              remainingMs: 0,
-              startedAtPerf: undefined,
-              startedAtWall: undefined,
-            };
-          } else {
-            state.timer = {
-              ...t,
-              running: true,
-              remainingMs: remaining,
-              startedAtPerf: performance.now(),
-              startedAtWall: Date.now(),
-            };
-          }
-        } else {
-          state.timer = { ...t, startedAtPerf: undefined };
+      name: "work-recipe:v3",
+      version: 4,
+      migrate: (persisted: unknown, version: number) => {
+        const state = persisted as { receipts?: Array<{ kind?: string; sourceTaskId?: string; id: string }> };
+        if (version < 4 && state.receipts) {
+          state.receipts = state.receipts.map((r) =>
+            r.kind !== "session" && !r.sourceTaskId
+              ? { ...r, sourceTaskId: r.id }
+              : r,
+          );
         }
+        return state;
+      },
+      partialize: (state) => {
+        const persistedState = { ...state } as Partial<StoreState>;
+        delete persistedState.hasHydrated;
+        delete persistedState._setHasHydrated;
+        delete persistedState.cutReceipt;
+        delete persistedState.landingReceiptId;
+        return persistedState;
       },
     },
   ),
 );
 
-export function formatMs(ms: number): string {
-  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+if (typeof window !== "undefined" && useStore.persist) {
+  useStore.persist.onFinishHydration((state) => {
+    state._setHasHydrated(true);
+  });
+
+  if (useStore.persist.hasHydrated()) {
+    useStore.getState()._setHasHydrated(true);
+  }
+
+  window.setTimeout(() => {
+    useStore.getState()._setHasHydrated(true);
+  }, 0);
+}
+
+export function liveActiveMs(now?: number): number {
+  const s = useStore.getState();
+  const t = s.timer;
+  if (t.mode === "working" && t.startedAtWall && now !== undefined) {
+    return t.accumulatedActiveMs + (now - t.startedAtWall);
+  }
+  return t.accumulatedActiveMs;
+}
+
+export function liveBreakMs(now?: number): number {
+  const s = useStore.getState();
+  const t = s.timer;
+  if (t.mode === "break" && t.startedAtWall && now !== undefined) {
+    return t.accumulatedBreakMs + (now - t.startedAtWall);
+  }
+  return t.accumulatedBreakMs;
+}
+
+export function formatClock(ms: number): string {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
   const m = Math.floor(totalSec / 60);
   const s = totalSec % 60;
   return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
 }
 
 export function formatDuration(ms: number): string {
-  const totalMin = Math.floor(ms / 60_000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
   if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-}
-
-export function phaseLabel(p: Phase): string {
-  if (p === "focus") return "Focus";
-  if (p === "shortBreak") return "Short break";
-  return "Long break";
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
 }

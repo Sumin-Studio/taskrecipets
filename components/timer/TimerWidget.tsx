@@ -1,106 +1,180 @@
 "use client";
 
-import { useState } from "react";
-import { useStore, formatMs, phaseLabel } from "@/lib/store";
+import {
+  useStore,
+  formatClock,
+  liveActiveMs,
+  liveBreakMs,
+} from "@/lib/store";
 import { useTimerTick } from "@/lib/useTimerTick";
-import { SettingsSheet } from "./SettingsSheet";
 
 export function TimerWidget() {
-  useTimerTick();
+  const now = useTimerTick();
 
   const timer = useStore((s) => s.timer);
   const currentTaskId = useStore((s) => s.currentTaskId);
   const tasks = useStore((s) => s.tasks);
-  const startTimer = useStore((s) => s.startTimer);
-  const pauseTimer = useStore((s) => s.pauseTimer);
-  const resetTimer = useStore((s) => s.resetTimer);
-  const skipPhase = useStore((s) => s.skipPhase);
-
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settings = useStore((s) => s.settings);
+  const start = useStore((s) => s.start);
+  const pause = useStore((s) => s.pause);
+  const requestComplete = useStore((s) => s.requestComplete);
+  const pendingPhotoFor = useStore((s) => s.pendingPhotoFor);
+  const updateSettings = useStore((s) => s.updateSettings);
 
   const currentTask = tasks.find((t) => t.id === currentTaskId) ?? null;
 
-  // live-tick local display (re-render is driven by store updates from useTimerTick)
-  const liveRemaining = timer.running && timer.startedAtWall !== undefined
-    ? Math.max(0, timer.remainingMs - (Date.now() - timer.startedAtWall))
-    : timer.remainingMs;
+  const onBreak = timer.mode === "break";
+  const working = timer.mode === "working";
+  const active = liveActiveMs(now ?? undefined);
+  const breakTime = liveBreakMs(now ?? undefined);
+
+  // Top subheading content
+  let label: React.ReactNode;
+  if (!currentTask) {
+    label = "Choose next task";
+  } else if (onBreak) {
+    label = (
+      <>
+        Break · <span className="tabular-nums">{formatClock(breakTime)}</span>
+      </>
+    );
+  } else {
+    label = `Working on: ${truncate(currentTask.title, 30)}`;
+  }
+
+  // big clock always shows active time — frozen on break, ticking while working
+  const displayMs = active;
+
+  const canComplete = !!currentTask && !pendingPhotoFor;
 
   return (
-    <div className="relative w-[500px]">
-      {/* outer shell — rounded 48px */}
-      <div className="shell-skeuo rounded-[48px] p-[11px] pb-6">
+    <div className="workspace-panel relative">
+      <div className="shell-skeuo timer-widget-shell">
         {/* LCD screen */}
-        <div className="lcd-screen relative rounded-t-[40px] rounded-b-[20px] px-6 pt-5 pb-6 overflow-hidden">
-          <div className="text-center text-[15px] text-[color:var(--color-lcd-ink)]/85">
-            {phaseLabel(timer.phase)} ·{" "}
-            {currentTask
-              ? `Current working on: ${truncate(currentTask.title, 28)}`
-              : "Pick a task to begin"}
+        <div className="lcd-screen timer-widget-lcd relative overflow-hidden">
+          <div className="timer-widget-label text-center text-[color:var(--color-lcd-ink)]/85">
+            {label}
           </div>
-          <div className="text-center font-mono text-[color:var(--color-lcd-ink)] leading-none mt-2 tabular-nums select-none"
-               style={{ fontSize: 95, lineHeight: "114px", fontWeight: 400 }}>
-            {formatMs(liveRemaining)}
+          <div className="timer-widget-clock text-center font-mono text-[color:var(--color-lcd-ink)] mt-1.5 tabular-nums select-none">
+            {formatClock(displayMs)}
           </div>
-          {/* tiny phase dots in the corner */}
-          <div className="absolute bottom-2 right-4 flex gap-[5px]">
-            {Array.from({ length: useStore.getState().settings.longBreakEvery }).map((_, i) => (
-              <span
-                key={i}
-                className="block w-[6px] h-[6px] rounded-full"
-                style={{
-                  background: i < timer.focusBlocksInCycle
-                    ? "var(--color-lcd-ink)"
-                    : "rgba(54,54,54,0.18)",
-                }}
-              />
-            ))}
+
+          {/* sub-row: just the break tally */}
+          <div className="flex items-center justify-end mt-1 text-[11px] text-[color:var(--color-lcd-ink)]/55 tabular-nums px-1">
+            {timer.breakCount} {timer.breakCount === 1 ? "break" : "breaks"} taken
           </div>
-          {/* settings gear */}
+
+          {/* sound toggle in corner */}
           <button
-            onClick={() => setSettingsOpen(true)}
-            aria-label="Settings"
+            onClick={() => updateSettings({ soundOn: !settings.soundOn })}
+            aria-label={settings.soundOn ? "Mute" : "Unmute"}
             className="absolute top-3 left-4 text-[color:var(--color-lcd-ink)]/55 hover:text-[color:var(--color-lcd-ink)] transition-colors"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19.14 12.94a7.43 7.43 0 0 0 0-1.88l2-1.55a.5.5 0 0 0 .12-.61l-1.9-3.29a.5.5 0 0 0-.6-.22l-2.36.94a7.27 7.27 0 0 0-1.63-.95l-.36-2.51a.5.5 0 0 0-.5-.42h-3.8a.5.5 0 0 0-.5.42l-.36 2.51a7.3 7.3 0 0 0-1.63.95l-2.36-.94a.5.5 0 0 0-.6.22l-1.9 3.29a.5.5 0 0 0 .12.61l2 1.55a7.43 7.43 0 0 0 0 1.88l-2 1.55a.5.5 0 0 0-.12.61l1.9 3.29a.5.5 0 0 0 .6.22l2.36-.94a7.3 7.3 0 0 0 1.63.95l.36 2.51a.5.5 0 0 0 .5.42h3.8a.5.5 0 0 0 .5-.42l.36-2.51a7.27 7.27 0 0 0 1.63-.95l2.36.94a.5.5 0 0 0 .6-.22l1.9-3.29a.5.5 0 0 0-.12-.61ZM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5Z" />
-            </svg>
+            {settings.soundOn ? <SoundOnIcon /> : <SoundOffIcon />}
           </button>
         </div>
 
-        {/* control buttons */}
-        <div className="mt-4 flex items-center justify-between gap-3 px-1">
-          <ControlButton
-            label={timer.running ? "Pause" : "Start"}
-            onClick={() => (timer.running ? pauseTimer() : startTimer())}
-            primary={!timer.running}
-          />
-          <ControlButton label="Reset" onClick={resetTimer} />
-          <ControlButton label="Skip" onClick={skipPhase} />
+        {/* control row — three latched icon buttons */}
+        <div className="timer-widget-controls flex items-center justify-between px-1">
+          <IconControl
+            label={onBreak ? "Resume" : "Start"}
+            onClick={start}
+            disabled={!currentTask || working}
+            pressed={working}
+          >
+            <PlayIcon />
+          </IconControl>
+          <IconControl
+            label="Pause"
+            onClick={pause}
+            disabled={!working}
+            pressed={onBreak}
+          >
+            <PauseIcon />
+          </IconControl>
+          <IconControl
+            label="Complete"
+            onClick={requestComplete}
+            disabled={!canComplete}
+            pressed={false}
+          >
+            <CheckIcon />
+          </IconControl>
         </div>
       </div>
-
-      <SettingsSheet open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }
 
-function ControlButton({
+function IconControl({
   label,
   onClick,
-  primary,
+  disabled,
+  pressed,
+  children,
 }: {
   label: string;
   onClick: () => void;
-  primary?: boolean;
+  disabled?: boolean;
+  pressed: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className="btn-skeuo flex-1 h-[58px] rounded-full text-[14px] tracking-wider uppercase text-[color:var(--color-ink)]/75"
-      style={primary ? { color: "var(--color-ink)" } : undefined}
+      disabled={disabled}
+      aria-pressed={pressed}
+      aria-label={label}
+      title={label}
+      data-pressed={pressed}
+      data-sound-effect="timer-main"
+      className="btn-skeuo timer-widget-btn flex-1 rounded-full flex items-center justify-center text-[color:var(--color-ink)] disabled:cursor-not-allowed"
     >
-      {label}
+      {children}
     </button>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5.5v13a1 1 0 0 0 1.55.83l10-6.5a1 1 0 0 0 0-1.66l-10-6.5A1 1 0 0 0 8 5.5Z" />
+    </svg>
+  );
+}
+
+function PauseIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6.5" y="5" width="4" height="14" rx="1" />
+      <rect x="13.5" y="5" width="4" height="14" rx="1" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12.5l4.5 4.5L19 7.5" />
+    </svg>
+  );
+}
+
+function SoundOnIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 9v6h4l5 5V4L7 9H3Z" />
+      <path d="M16 8.5a4 4 0 0 1 0 7" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function SoundOffIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M3 9v6h4l5 5V4L7 9H3Z" />
+      <path d="M16 9l5 5M21 9l-5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
   );
 }
 

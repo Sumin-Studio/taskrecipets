@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Task, useStore } from "@/lib/store";
+import { Task, useStore, formatDuration } from "@/lib/store";
 
 export function TaskRow({ task }: { task: Task }) {
   const currentTaskId = useStore((s) => s.currentTaskId);
   const selectTask = useStore((s) => s.selectTask);
-  const completeTask = useStore((s) => s.completeTask);
   const addSubtask = useStore((s) => s.addSubtask);
   const toggleSubtask = useStore((s) => s.toggleSubtask);
   const removeSubtask = useStore((s) => s.removeSubtask);
@@ -18,65 +17,70 @@ export function TaskRow({ task }: { task: Task }) {
 
   const isCurrent = currentTaskId === task.id;
   const isDone = !!task.completedAt;
-  const allSubsDone = task.subtasks.length > 0 && task.subtasks.every((s) => s.done);
+  const subDoneCount = task.subtasks.filter((s) => s.done).length;
+  const subTotal = task.subtasks.length;
 
   return (
     <div
-      className={`rounded-xl bg-white/70 outline outline-1 outline-[color:var(--color-shell-outline)]/70 transition-shadow ${
-        isCurrent && !isDone ? "shadow-[0_0_0_2px_rgba(54,54,54,0.18)]" : ""
+      className={`task-row rounded-2xl transition-shadow ${
+        isCurrent && !isDone ? "task-row-current" : ""
       }`}
     >
-      <div className="flex items-start gap-3 px-3 py-2.5">
-        {/* checkbox */}
+      <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+        {/* select-as-current checkbox (filled when this is the live task) */}
         <button
-          onClick={() => completeTask(task.id)}
-          aria-label="Complete task"
-          className="mt-0.5 w-[18px] h-[18px] shrink-0 rounded-[5px] border border-[color:var(--color-shell-outline)] bg-white hover:border-[color:var(--color-ink)] transition-colors flex items-center justify-center"
+          onClick={() => !isDone && selectTask(task.id)}
+          aria-label="Select task"
+          className="shrink-0 w-[18px] h-[18px] rounded-[5px] bg-white shadow-[inset_0_1px_2px_rgba(0,0,0,0.12),0_1px_0_rgba(255,255,255,0.9)] border border-[color:var(--color-shell-outline)] flex items-center justify-center hover:border-[color:var(--color-ink)]/60 transition-colors"
         >
+          {isCurrent && !isDone && (
+            <span className="w-[8px] h-[8px] rounded-[2px] bg-[color:var(--color-ink)]" />
+          )}
           {isDone && (
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M1.5 5L4 7.5L8.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M1.5 5L4 7.5L8.5 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           )}
         </button>
 
+        {/* title + inline subtask toggle */}
         <button
           onClick={() => !isDone && selectTask(task.id)}
-          className={`flex-1 text-left text-[14px] leading-snug ${
+          className={`flex items-center gap-2 flex-1 text-left text-[14px] leading-snug ${
             isDone ? "line-through text-[color:var(--color-muted)]" : "text-[color:var(--color-ink)]"
-          } cursor-pointer`}
+          }`}
         >
-          {task.title}
-          {task.pomodorosCompleted > 0 && (
-            <span className="ml-2 text-[11px] text-[color:var(--color-muted)] tabular-nums">
-              {"■".repeat(Math.min(task.pomodorosCompleted, 8))}
-              {task.pomodorosCompleted > 8 ? ` ×${task.pomodorosCompleted}` : ""}
+          <span className="truncate">{task.title}</span>
+          {!isDone && (
+            <span
+              role="button"
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className="subtask-pill shrink-0 inline-flex items-center justify-center h-[20px] min-w-[20px] px-1.5 rounded-full text-[10px] tabular-nums text-[color:var(--color-ink)]/70 hover:text-[color:var(--color-ink)]"
+            >
+              {subTotal > 0 ? `${subDoneCount}/${subTotal}` : "+"}
             </span>
           )}
         </button>
 
-        <div className="flex items-center gap-1 shrink-0">
-          {!isDone && (
-            <button
-              onClick={() => setExpanded((e) => !e)}
-              className="text-[11px] text-[color:var(--color-muted)] hover:text-[color:var(--color-ink)] px-1.5 h-6 rounded"
-              aria-label="Toggle subtasks"
-            >
-              {expanded || task.subtasks.length > 0
-                ? `${task.subtasks.filter((s) => s.done).length}/${task.subtasks.length || "+"}`
-                : "+"}
-            </button>
-          )}
-          <button
-            onClick={() => removeTask(task.id)}
-            className="text-[color:var(--color-muted)]/60 hover:text-[color:var(--color-ink)] w-6 h-6 flex items-center justify-center"
-            aria-label="Remove task"
-          >
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-              <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
+        {isDone && (
+          <span className="shrink-0 text-[10px] text-[color:var(--color-muted)] tabular-nums">
+            {formatDuration(task.totalActiveMs)}
+          </span>
+        )}
+
+        <button
+          onClick={() => removeTask(task.id)}
+          aria-label="Remove task"
+          className="shrink-0 text-[color:var(--color-muted)]/60 hover:text-[color:var(--color-ink)] w-6 h-6 flex items-center justify-center"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </button>
       </div>
 
       <AnimatePresence initial={false}>
@@ -88,7 +92,7 @@ export function TaskRow({ task }: { task: Task }) {
             transition={{ duration: 0.18 }}
             className="overflow-hidden"
           >
-            <div className="pl-9 pr-3 pb-3 space-y-1.5">
+            <div className="pl-[42px] pr-3 pb-3 space-y-1.5">
               {task.subtasks.map((su) => (
                 <div key={su.id} className="flex items-center gap-2 text-[13px]">
                   <button
@@ -97,7 +101,7 @@ export function TaskRow({ task }: { task: Task }) {
                   >
                     {su.done && (
                       <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 5L4 7.5L8.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                        <path d="M1.5 5L4 7.5L8.5 2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                       </svg>
                     )}
                   </button>
@@ -108,6 +112,7 @@ export function TaskRow({ task }: { task: Task }) {
                   </span>
                   <button
                     onClick={() => removeSubtask(task.id, su.id)}
+                    aria-label="Remove subtask"
                     className="text-[color:var(--color-muted)]/60 hover:text-[color:var(--color-ink)] w-5 h-5 flex items-center justify-center"
                   >
                     <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
@@ -134,11 +139,6 @@ export function TaskRow({ task }: { task: Task }) {
                   className="flex-1 bg-transparent text-[13px] outline-none placeholder:text-[color:var(--color-muted)]/70"
                 />
               </form>
-              {allSubsDone && (
-                <div className="text-[11px] text-[color:var(--color-muted)] italic pt-1">
-                  All subtasks done — tick the checkbox to print the receipt.
-                </div>
-              )}
             </div>
           </motion.div>
         )}

@@ -1,56 +1,75 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import Image from "next/image";
+import { useStore } from "@/lib/store";
 import { TimerWidget } from "./timer/TimerWidget";
 import { TaskList } from "./tasks/TaskList";
 import { Tray } from "./tray/Tray";
+import { PhotoCaptureModal } from "./photo/PhotoCaptureModal";
+import { LoadingScreen } from "./LoadingScreen";
+import { SoundEffects } from "./SoundEffects";
 
 /**
- * Client-only wrapper so the Zustand persist hydration doesn't cause SSR
- * mismatches. We render a static skeleton on the server and let the real
- * components mount on the client.
+ * Two-column workspace that fits the viewport without scrolling.
+ * Row 1: brand (left) + attribution (right). Row 2: timer/tasks (left) + tray
+ * (right) — both cells share a top edge so the scaled tray stays aligned with
+ * the countdown widget. Sizes use fluid clamp() tokens (see globals.css).
  */
 export function Workspace() {
-  const [hydrated, setHydrated] = useState(false);
-  useEffect(() => setHydrated(true), []);
-
-  if (!hydrated) {
-    return (
-      <div className="grid grid-cols-[minmax(540px,560px)_1fr] min-h-screen">
-        <div />
-        <div />
-      </div>
-    );
-  }
+  const hydrated = useStore((s) => s.hasHydrated);
+  const [loadingDone, setLoadingDone] = useState(false);
+  const handleLoadingComplete = useCallback(() => setLoadingDone(true), []);
 
   return (
-    <div className="grid grid-cols-[minmax(540px,560px)_1fr] gap-8 min-h-screen px-10 py-8">
-      {/* Left column: brand + timer + tasks */}
-      <div className="flex flex-col gap-10">
-        <Brand />
-        <TimerWidget />
-        <TaskList />
-      </div>
+    <>
+      {hydrated && (
+        <div className="workspace-shell h-screen w-screen overflow-hidden">
+          <div className="workspace-grid">
+            {/* Row 1 — brand + attribution */}
+            <div className="workspace-left workspace-brand-cell">
+              <Brand />
+            </div>
+            <div className="workspace-credit-cell relative min-w-0">
+              <CreatedBy />
+            </div>
 
-      {/* Right column: tray + receipts */}
-      <div className="relative">
-        <CreatedBy />
-        <Tray />
-      </div>
-    </div>
+            {/* Row 2 — timer/tasks and tray share the same top baseline */}
+            <div className="workspace-left workspace-controls-cell flex flex-col gap-8 min-h-0">
+              <TimerWidget />
+              <div className="workspace-task-list-wrap flex-1 min-h-0">
+                <TaskList />
+              </div>
+            </div>
+            <div className="workspace-tray-cell relative min-h-0 min-w-0 overflow-visible">
+              <Tray />
+            </div>
+          </div>
+
+          <PhotoCaptureModal />
+          <SoundEffects />
+        </div>
+      )}
+      {!loadingDone && (
+        <LoadingScreen ready={hydrated} onComplete={handleLoadingComplete} />
+      )}
+    </>
   );
 }
 
 function Brand() {
   return (
     <div className="flex items-center gap-3">
-      <div className="w-[42px] h-[42px] rounded-lg bg-white/80 outline outline-1 outline-[color:var(--color-shell-outline)] flex items-center justify-center">
-        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-          <rect x="2" y="6" width="18" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" />
-          <path d="M5 6V4M17 6V4M5 10H17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        </svg>
-      </div>
-      <div className="text-[14px] tracking-[0.32em] uppercase text-[color:var(--color-ink)]/85">
+      <Image
+        src="/logo.svg"
+        alt="Work Recipe"
+        width={2080}
+        height={3294}
+        unoptimized
+        className="h-10 w-auto select-none"
+        draggable={false}
+      />
+      <div className="text-[13px] tracking-[0.32em] uppercase text-[color:var(--color-ink)]/85">
         Work Recipe
       </div>
     </div>
@@ -59,7 +78,7 @@ function Brand() {
 
 function CreatedBy() {
   return (
-    <div className="absolute top-2 right-4 text-[11px] text-[color:var(--color-muted)] tracking-wider z-50">
+    <div className="absolute top-3 right-5 text-[10px] text-[color:var(--color-muted)] tracking-wider z-50">
       Created by suminstudio
     </div>
   );
